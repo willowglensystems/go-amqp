@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Azure/go-amqp/internal/testconn"
+	"github.com/willowglensystems/go-amqp/internal/testconn"
 )
 
 // Known good challenges/responses taken following specification:
@@ -219,6 +219,41 @@ func TestConnSASLXOAUTH2AuthFailsAdditionalErrorResponse(t *testing.T) {
 	case !strings.Contains(err.Error(), "Initial error response: fail1, additional response: fail2"):
 		t.Errorf("unexpected connection failure : %s", err)
 	}
+}
+
+func TestConnSASLExternal(t *testing.T) {
+	buf, err := peerResponse(
+		[]byte("AMQP\x03\x01\x00\x00"),
+		frame{
+			type_:   frameTypeSASL,
+			channel: 0,
+			body:    &saslMechanisms{Mechanisms: []symbol{saslMechanismEXTERNAL}},
+		},
+		frame{
+			type_:   frameTypeSASL,
+			channel: 0,
+			body:    &saslOutcome{Code: codeSASLOK},
+		},
+		[]byte("AMQP\x00\x01\x00\x00"),
+		frame{
+			type_:   frameTypeAMQP,
+			channel: 0,
+			body:    &performOpen{},
+		},
+	)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	c := testconn.New(buf)
+	client, err := New(c,
+		ConnSASLExternal(),
+		ConnIdleTimeout(10*time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
 }
 
 func peerResponse(items ...interface{}) ([]byte, error) {
